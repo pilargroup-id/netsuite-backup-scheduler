@@ -1,0 +1,12 @@
+{
+  "module": "journal-entry",
+  "transactionType": "Journal",
+  "recordtypeid": "journalentry",
+  "type": "JOURNALENTRY",
+  "independentlyVerified": true,
+  "evidenceRecordIds": ["224", "640", "1988"],
+  "evidenceRecordCount": 60,
+  "confirmedBy": "Module 13 independent deletedrecord discovery with 12 exact historical positive proofs and active Journal negative control, 2026-10-29",
+  "scope": "2026-10-01..open-ended",
+  "note": "Historical tuple identity only. Every future candidate requires fresh unique deletedrecord proof, global Transaction absence, scoped matching, fail-closed batch limit and independent live verification. This document does not authorize deletion or scheduler integration."
+}

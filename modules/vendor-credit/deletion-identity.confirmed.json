@@ -1,0 +1,12 @@
+{
+  "module": "vendor-credit",
+  "transactionType": "VendCred",
+  "recordtypeid": "vendorcredit",
+  "type": "VENDORCREDIT",
+  "independentlyVerified": true,
+  "evidenceRecordIds": ["198", "2019", "2006"],
+  "evidenceRecordCount": 227,
+  "confirmedBy": "Module 11 B14 historical deletedrecord tuple and independent source absence",
+  "scope": "2026-10-01..open-ended",
+  "note": "Identity only; each future deletion requires its own fresh exact proof and absence check."
+}

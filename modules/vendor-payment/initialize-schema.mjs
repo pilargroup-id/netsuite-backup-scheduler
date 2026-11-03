@@ -1,0 +1,15 @@
+// Module 12: isolated schema initializer. Explicit --dry-run / --apply-schema only.
+// Never writes sync_checkpoints, deletes data, registers tasks, or touches other modules.
+import {dataset,query,T,DATASET,LOCATION} from '../../common/bigquery-client.mjs';
+import {GROUPS,columnDefinitions} from './schema-contract.mjs';
+const dry=process.argv.includes('--dry-run'),apply=process.argv.includes('--apply-schema');
+if(dry===apply||process.argv.length!==3)throw Error('Exactly one of --dry-run or --apply-schema required');
+const assert=(x,m)=>{if(!x)throw Error('BLOCKED: '+m);};
+const expected=g=>columnDefinitions(g).map(([name,type])=>({name,type}));
+async function inspect(){const states=[];for(const g of GROUPS){const table=dataset.table(g.table);const [exists]=await table.exists();let rows=null;if(exists){const [meta]=await table.getMetadata();const actual=meta.schema?.fields??[];assert(actual.length===expected(g).length,'Unexpected column count '+g.table);for(const f of expected(g)){const a=actual.find(x=>x.name.toLowerCase()===f.name.toLowerCase());assert(a,'Missing '+g.table+'.'+f.name);assert((a.type==='BOOLEAN'?'BOOL':a.type.toUpperCase())===f.type,'Type mismatch '+g.table+'.'+f.name);}const result=await query(`SELECT COUNT(*) AS n FROM ${T(g.table)}`);rows=Number(result[0].n);assert(rows===0,'Existing data in '+g.table);}states.push({table:g.table,exists,rows});}return states;}
+async function checkCheckpoints(){const [exists]=await dataset.table('sync_checkpoints').exists();assert(exists,'Shared checkpoints table missing');const result=await query(`SELECT record_type FROM ${T('sync_checkpoints')} WHERE record_type IN (${GROUPS.map(g=>`'${g.table}'`).join(',')})`);assert(result.length===0,'Module 12 checkpoint already exists');}
+async function main(){console.log('MODULE 12 VENDOR PAYMENT SCHEMA',dry?'DRY RUN':'APPLY',DATASET,LOCATION);await checkCheckpoints();console.log('BEFORE',JSON.stringify(await inspect()));console.log('CONTRACT',JSON.stringify(GROUPS.map(g=>({table:g.table,fields:expected(g)}))));if(dry){console.log('PHASE B SCHEMA DRY RUN PASS: ZERO WRITES');return;}
+ if(process.env.NETSUITE_VENDOR_PAYMENT_SCHEMA_CONFIRM!=='MODULE12_ONLY')throw Error('Set NETSUITE_VENDOR_PAYMENT_SCHEMA_CONFIRM=MODULE12_ONLY explicitly to apply');
+ for(const g of GROUPS){const required=new Set(g.key.filter(x=>x!=='account_id'));const defs=g.fields.map(([name,type])=>`${name} ${type}${required.has(name)?' NOT NULL':''}`).join(',');const extra=g===GROUPS[0]?',synced_at TIMESTAMP,is_deleted BOOL DEFAULT FALSE,deleted_at TIMESTAMP':',synced_at TIMESTAMP';const partition=g===GROUPS[0]?' PARTITION BY transaction_date':'';const cluster=` CLUSTER BY ${g.key.slice(0,4).join(',')}`;await query(`CREATE TABLE IF NOT EXISTS ${T(g.table)} (${defs}${extra})${partition}${cluster}`);}
+ console.log('AFTER',JSON.stringify(await inspect()));await checkCheckpoints();console.log('PHASE B SCHEMA APPLY PASS: FIVE EMPTY ISOLATED TABLES');}
+main().catch(e=>{console.error('PHASE B SCHEMA BLOCKED',e.stack??String(e));process.exitCode=1;});

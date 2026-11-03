@@ -1,0 +1,26 @@
+{
+  "module": "inventory-adjustment",
+  "transactionType": "InvAdjst",
+  "recordtypeid": "inventoryadjustment",
+  "type": "INVENTORYADJUSTMENT",
+  "scope": "2026-10-01..open-ended",
+  "independentlyVerified": true,
+  "evidenceRecordIds": [
+    "178",
+    "187",
+    "188",
+    "189",
+    "200",
+    "212",
+    "1462",
+    "1928",
+    "1949",
+    "1951",
+    "2545",
+    "3120"
+  ],
+  "evidenceContext": "Historical deleted Inventory Adjustment records validated by exact deletedrecord tuple and source absence, with a live negative control, in Module 15 Phase L on 2026-11-02. Certificate script additionally requires global transaction nonvisibility on revalidation.",
+  "perCandidateDeletionAuthorized": false,
+  "automaticDeletionAuthorized": false,
+  "maxApplyBatch": 3
+}

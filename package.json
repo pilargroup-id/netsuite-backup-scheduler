@@ -1,0 +1,20 @@
+{
+  "name": "netsuite-backup",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/foundation-test.mjs && node tests/child-runner-test.mjs && node tests/fast-delta-integration-test.mjs",
+    "check": "node tests/foundation-test.mjs",
+    "status": "node scripts/fast-delta-freshness.mjs 20",
+    "scheduler:config": "node scripts/scheduler-runner.mjs --show-config",
+    "sync:dry": "node scripts/fast-delta.mjs --dry-run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "description": ""
+}

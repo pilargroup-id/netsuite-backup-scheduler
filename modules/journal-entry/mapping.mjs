@@ -1,0 +1,31 @@
+// Module 13 Journal Entry: source extraction and exact deterministic mapping. NO WRITES.
+import {token,fetchAll} from '../../common/netsuite-client.mjs';
+import {validateNumeric} from '../../common/decimal-precision.mjs';
+import {GROUPS} from './schema-contract.mjs';
+export {token};
+const TYPE='Journal', FROM='2026-10-01';
+const scope=`t.type='${TYPE}' AND t.trandate>=TO_DATE('${FROM}','YYYY-MM-DD')`;
+const s=x=>x==null?null:String(x);
+const flag=x=>String(x??'F').toUpperCase()==='T';
+const id=x=>{const v=s(x);if(!/^[1-9]\d*$/.test(v??''))throw Error('Invalid source ID '+v);return v;};
+const decimal=(x,p,f)=>validateNumeric(x,{module:'journal-entry',recordId:p,field:f});
+const date=x=>{if(!/^\d{4}-\d\d-\d\d$/.test(s(x)??''))throw Error('Invalid date '+x);return s(x);};
+const datetime=x=>{if(!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(s(x)??''))throw Error('Invalid datetime '+x);return s(x);};
+async function batches(a,ids,queryBuilder){const all=[];for(let i=0;i<ids.length;i+=25){const subset=ids.slice(i,i+25).map(id).join(',');all.push(...await fetchAll(a,queryBuilder(subset)));}return all;}
+export async function fetchHeaders(a){return fetchAll(a,`SELECT t.id AS internal_id,t.tranid AS document_number,TO_CHAR(t.trandate,'YYYY-MM-DD') AS transaction_date,TO_CHAR(t.lastmodifieddate,'YYYY-MM-DD HH24:MI:SS') AS last_modified,t.memo,t.status AS status_id,t.currency AS currency_id,t.exchangerate,t.postingperiod AS posting_period_id,t.subsidiary AS subsidiary_id,t.posting,t.void,t.voided FROM Transaction t WHERE ${scope} ORDER BY t.id`);}
+export async function fetchLines(a,ids){return batches(a,ids,p=>`SELECT l.transaction AS transaction_id,l.id AS line_id,l.uniquekey AS line_unique_key,l.linesequencenumber AS line_sequence_number,l.mainline,l.expenseaccount AS account_id,l.department AS department_id,l.class AS class_id,l.location AS location_id,l.subsidiary AS subsidiary_id,l.memo,l.foreignamount AS foreign_amount,l.netamount AS net_amount FROM TransactionLine l WHERE l.transaction IN (${p}) ORDER BY l.transaction,l.id`);}
+export async function fetchGL(a,ids){return batches(a,ids,p=>`SELECT g.transaction AS transaction_id,g.transactionline AS line_id,g.accountingbook AS accounting_book_id,g.account AS account_id,g.posting,g.debit,g.credit FROM TransactionAccountingLine g WHERE g.transaction IN (${p}) ORDER BY g.transaction,g.accountingbook,g.transactionline,g.account`);}
+export async function fetchPreviousLinks(a,ids){return batches(a,ids,p=>`SELECT k.previousdoc AS previous_doc_id,k.previousline AS previous_line_id,k.nextdoc AS next_doc_id,k.nextline AS next_line_id,k.previoustype AS previous_type,k.nexttype AS next_type,k.linktype AS link_type,k.foreignamount AS applied_amount,TO_CHAR(k.lastmodifieddate,'YYYY-MM-DD HH24:MI:SS') AS last_modified FROM PreviousTransactionLineLink k WHERE k.nextdoc IN (${p}) ORDER BY k.nextdoc,k.previousdoc,k.previousline,k.nextline`);}
+export async function fetchNextLinks(a,ids){return batches(a,ids,p=>`SELECT k.previousdoc AS previous_doc_id,k.previousline AS previous_line_id,k.nextdoc AS next_doc_id,k.nextline AS next_line_id,k.previoustype AS previous_type,k.nexttype AS next_type,k.linktype AS link_type,k.foreignamount AS applied_amount,TO_CHAR(k.lastmodifieddate,'YYYY-MM-DD HH24:MI:SS') AS last_modified FROM NextTransactionLineLink k WHERE k.previousdoc IN (${p}) ORDER BY k.previousdoc,k.nextdoc,k.previousline,k.nextline`);}
+export function mapSource(headers,lines,gl,previous,next){
+ const out={headers:[],transactionLines:[],accountingLines:[],previousLinks:[],nextLinks:[]};
+ const seen=new Map(GROUPS.map(g=>[g.source,new Set()]));const ids=new Set();const lineIds=new Set();
+ function add(group,row){const g=GROUPS.find(x=>x.source===group);const key=JSON.stringify(g.key.map(k=>row[k]??null));if(seen.get(group).has(key))throw Error(`Duplicate ${group} ${key}`);seen.get(group).add(key);for(const [k,t] of g.fields){const v=row[k];if(v==null)continue;if(t==='BOOL'?typeof v!=='boolean':typeof v!=='string')throw Error(`Wrong type ${group}.${k}`);}out[group].push(row);}
+ for(const h of headers){const p=id(h.internal_id);if(ids.has(p))throw Error('Duplicate header '+p);ids.add(p);add('headers',{journal_entry_id:p,document_number:s(h.document_number),transaction_date:date(h.transaction_date),last_modified:datetime(h.last_modified),memo:s(h.memo),status_id:s(h.status_id),currency_id:s(h.currency_id),exchange_rate:decimal(h.exchangerate,p,'exchange_rate'),posting_period_id:s(h.posting_period_id),subsidiary_id:s(h.subsidiary_id),posting:flag(h.posting),is_void:flag(h.void)||flag(h.voided)});}
+ function known(p){if(!ids.has(p))throw Error('Orphan source record '+p);}
+ for(const l of lines){const p=id(l.transaction_id);known(p);const lid=s(l.line_id);if(lid==null)throw Error('Missing line ID '+p);lineIds.add(p+'|'+lid);add('transactionLines',{journal_entry_id:p,line_id:lid,line_unique_key:id(l.line_unique_key),line_sequence_number:s(l.line_sequence_number),is_mainline:flag(l.mainline),account_id:s(l.account_id),department_id:s(l.department_id),class_id:s(l.class_id),location_id:s(l.location_id),subsidiary_id:s(l.subsidiary_id),memo:s(l.memo),foreign_amount:decimal(l.foreign_amount,p,'foreign_amount'),net_amount:decimal(l.net_amount,p,'net_amount')});}
+ for(const a of gl){const p=id(a.transaction_id);known(p);const lid=s(a.line_id);if(!lineIds.has(p+'|'+lid))throw Error('Orphan GL line '+p+' '+lid);add('accountingLines',{journal_entry_id:p,line_id:lid,accounting_book_id:id(a.accounting_book_id),account_id:s(a.account_id),posting:flag(a.posting),debit:decimal(a.debit,p,'debit'),credit:decimal(a.credit,p,'credit')});}
+ function link(r,group,owner){const p=id(r[owner]);known(p);add(group,{journal_entry_id:p,previous_doc_id:id(r.previous_doc_id),previous_line_id:s(r.previous_line_id),next_doc_id:id(r.next_doc_id),next_line_id:s(r.next_line_id),previous_type:s(r.previous_type),next_type:s(r.next_type),link_type:s(r.link_type),applied_amount:decimal(r.applied_amount,p,'applied_amount'),last_modified:r.last_modified==null?null:datetime(r.last_modified)});}
+ for(const r of previous)link(r,'previousLinks','next_doc_id');for(const r of next)link(r,'nextLinks','previous_doc_id');
+ out.counts=Object.fromEntries(GROUPS.map(g=>[g.source,out[g.source].length]));return out;
+}

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {runChild} from '../common/child-runner.mjs';
+const invoke = (script, markers=['SUCCESS'], timeoutMs=2000) => runChild(process.execPath,['-e',script], {timeoutMs,markers});
+let r = await invoke("console.log('SUCCESS')");
+assert.equal(r.ok,true);
+r = await invoke("console.log('STAGING VALIDATION: PASS')");
+assert.equal(r.ok,false);
+assert.equal(r.detail,'SUCCESS_MARKER_MISSING');
+r = await invoke("console.log('SUCCESS');process.exit(4)");
+assert.equal(r.ok,false);
+assert.equal(r.exit,4);
+r = await invoke("setInterval(()=>{},1000)",['SUCCESS'],200);
+assert.equal(r.ok,false);
+assert.equal(r.timedOut,true);
+console.log('CHILD RUNNER TESTS PASS');

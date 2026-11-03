@@ -1,0 +1,10 @@
+{
+    "module":  "customer-credit-memo",
+    "transactionType":  "CustCred",
+    "independentlyVerified":  true,
+    "evidenceRecordId":  "3144782",
+    "recordtypeid":  "creditmemo",
+    "type":  "CREDITMEMO",
+    "confirmedBy":  "NetSuite deletedrecord independent proof",
+    "confirmedAt":  "2026-10-27T07:00:55Z"
+}

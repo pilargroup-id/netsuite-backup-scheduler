@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>LAPTOP-OIJPC6V0\IT PIAGAM</Author>
+    <Description>Monitors NetSuite BigQuery sync freshness every 5 minutes</Description>
+    <URI>\NetSuite Backup Freshness Monitor</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-21-2952435267-2552658720-3910129702-1001</UserId>
+      <LogonType>Password</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>2026-10-16T11:21:36+07:00</StartBoundary>
+      <Repetition>
+        <Interval>PT5M</Interval>
+      </Repetition>
+    </TimeTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\netsuite-backup\scripts\run-freshness-monitor.ps1"</Arguments>
+      <WorkingDirectory>C:\netsuite-backup</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

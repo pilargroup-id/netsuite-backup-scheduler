@@ -1,0 +1,26 @@
+// Module 11 Vendor Credit - initial-load payload dry-run only.
+// No BigQuery DDL/DML, staging, checkpoint, deletion, scheduler or file writes.
+import {dataset,query,T,DATASET,LOCATION} from '../../common/bigquery-client.mjs';
+import {token,fetchHeaders,fetchLines,fetchGL,fetchPreviousLinks,fetchNextLinks,mapSource} from './mapping.mjs';
+import {GROUPS,columnDefinitions} from './schema-contract.mjs';
+import {validateNumeric} from '../../common/decimal-precision.mjs';
+if(process.argv.length!==3||process.argv[2]!=='--dry-run')throw Error('Run with exactly --dry-run');
+const must=(ok,msg)=>{if(!ok)throw Error('VENDOR CREDIT INITIAL DRY-RUN BLOCKED: '+msg);};
+const cpNames=GROUPS.map(x=>`'${x.table}'`).join(',');
+const number=x=>Number(typeof x==='object'&&x!==null&&'value' in x?x.value:x);
+const SCALE=1000000000n;
+function units(v){if(v==null)return 0n;must(typeof v==='string'&&/^-?\d+(?:\.\d{1,9})?$/.test(v),'invalid exact decimal '+v);const neg=v.startsWith('-');const [i,f='']=v.replace('-','').split('.');const z=BigInt(i)*SCALE+BigInt(f.padEnd(9,'0'));return neg?-z:z;}
+function checkTypes(g,rows){const keys=new Set();for(let i=0;i<rows.length;i++){const r=rows[i];for(const [k,t] of g.fields){const v=r[k];if(v==null)continue;must(t==='BOOL'?typeof v==='boolean':typeof v==='string',`${g.table}[${i}].${k} type`);if(t==='NUMERIC')must(validateNumeric(v,{module:'vendor-credit',recordId:r.vendor_credit_id,field:k})===v,`${g.table}[${i}].${k} decimal not canonical`);if(t==='DATE')must(/^\d{4}-\d\d-\d\d$/.test(v),`${g.table}[${i}].${k} date`);if(t==='DATETIME')must(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(v),`${g.table}[${i}].${k} datetime`);}
+ for(const k of g.key)if(!(g.nullableKey??[]).includes(k))must(r[k]!=null&&r[k]!=='',`${g.table}[${i}] missing key ${k}`);
+ for(const k of Object.keys(r))must(g.fields.some(f=>f[0]===k),`${g.table}[${i}] unexpected ${k}`);
+ const key=JSON.stringify(g.key.map(k=>r[k]??null));must(!keys.has(key),`${g.table}[${i}] duplicate ${key}`);keys.add(key);
+}}
+async function assertEmpty(){const [cpExists]=await dataset.table('sync_checkpoints').exists();must(cpExists,'shared checkpoint table absent');const cp=await query(`SELECT record_type FROM ${T('sync_checkpoints')} WHERE record_type IN (${cpNames}) OR record_type IN ('vendor-credit','vendor_credit')`);must(!cp.length,'Vendor Credit checkpoint already exists');
+ for(const g of GROUPS){const table=dataset.table(g.table);const [exists]=await table.exists();must(exists,`missing ${g.table}`);const [meta]=await table.getMetadata();const actual=meta.schema?.fields??[],expected=columnDefinitions(g);must(actual.length===expected.length,`${g.table} field count`);for(const [name,type] of expected){const f=actual.find(x=>x.name.toLowerCase()===name.toLowerCase());must(f,`${g.table} missing ${name}`);must((f.type.toUpperCase()==='BOOLEAN'?'BOOL':f.type.toUpperCase())===type,`${g.table}.${name} type`);}const count=await query(`SELECT COUNT(*) n FROM ${T(g.table)}`);must(number(count[0].n)===0,`${g.table} not empty`);}}
+function linkSignature(x){return [x.vendor_credit_id,x.previous_doc_id,x.previous_line_id,x.next_doc_id,x.next_line_id,x.previous_type,x.next_type,x.link_type,x.applied_amount,x.last_modified].map(v=>v??'<NULL>').join('|');}
+async function main(){console.log(`MODULE 11 VENDOR CREDIT INITIAL PAYLOAD | DRY RUN | ${DATASET} | ${LOCATION}`);await assertEmpty();const a=await token();const h=await fetchHeaders(a);must(h.length>0,'no live VendCred headers');const ids=h.map(x=>x.internal_id);must(ids.length===new Set(ids.map(String)).size,'duplicate source headers');const [l,gl,p,n]=await Promise.all([fetchLines(a,ids),fetchGL(a,ids),fetchPreviousLinks(a,ids),fetchNextLinks(a,ids)]);const mapped=mapSource(h,l,gl,p,n);
+ for(const g of GROUPS){checkTypes(g,mapped[g.source]);console.log('PAYLOAD CONTRACT PASS',g.table,mapped[g.source].length);}
+ const balances=new Map();for(const x of mapped.accountingLines){must(x.posting,`GL not posting ${x.vendor_credit_id}`);const key=x.vendor_credit_id+'|'+x.accounting_book_id;const v=balances.get(key)??0n;balances.set(key,v+units(x.debit)-units(x.credit));}for(const [k,v] of balances)must(v===0n,'GL unbalanced '+k);
+ const left=mapped.previousLinks.map(linkSignature).sort(),right=mapped.nextLinks.map(linkSignature).sort();must(left.length===right.length,'link counts unequal');for(let i=0;i<left.length;i++)must(left[i]===right[i],'link mismatch index '+i);
+ const wm=h.map(x=>x.last_modified).filter(Boolean).sort().at(-1);must(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(wm??''),'invalid source watermark');await assertEmpty();console.log('SOURCE WATERMARK',wm);console.log('GL BALANCE PASS',balances.size);console.log('LINK MIRROR PASS',left.length);console.log('INITIAL SYNC DRY RUN RESULT',JSON.stringify({status:'PASS',counts:mapped.counts,glGroups:balances.size,mirroredLinks:left.length,writeOperations:0,checkpointChanges:0,deletionOperations:0,schedulerChanges:0}));}
+main().catch(e=>{console.error('INITIAL SYNC DRY RUN BLOCKED',e?.stack??String(e));process.exitCode=1;});

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { matchDeletedRecordProof } from '../common/verified-deletion-proof.mjs';
+const record = {recordtypeid:'customerpayment', type:'CUSTOMERPAYMENT'};
+const exact = {recordid:'1456',recordtypeid:'customerpayment',type:'CUSTOMERPAYMENT',deleteddate:'10/4/2021'};
+const collision = {recordid:'1456',recordtypeid:'inventoryitem',type:'INVENTORYITEM',deleteddate:'11/4/2021'};
+assert.equal(matchDeletedRecordProof([collision,exact], '1456',record).length,1,'cross-type collision must not suppress exact evidence');
+assert.equal(matchDeletedRecordProof([collision], '1456',record).length,0,'cross-type collision alone must never prove deletion');
+assert.equal(matchDeletedRecordProof([exact], '1457',record).length,0,'wrong ID must fail');
+assert.equal(matchDeletedRecordProof([{...exact, type:'VENDORPAYMENT'}], '1456',record).length,0,'wrong type must fail');
+assert.equal(matchDeletedRecordProof([{...exact,recordtypeid:'vendorpayment'}], '1456',record).length,0,'wrong recordtypeid must fail');
+assert.equal(matchDeletedRecordProof([{...exact,deleteddate:null}], '1456',record).length,0,'missing deletion date must fail');
+assert.equal(matchDeletedRecordProof([exact,exact], '1456',record).length,2,'duplicate exact evidence must be blocked by caller');
+assert.equal(matchDeletedRecordProof([], '1456',record).length,0);
+console.log('VERIFIED DELETION PROOF REGRESSION PASS: 8 cases');

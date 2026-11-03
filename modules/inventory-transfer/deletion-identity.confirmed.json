@@ -1,0 +1,13 @@
+{
+  "module": "inventory-transfer",
+  "transactionType": "InvTrnfr",
+  "recordtypeid": "inventorytransfer",
+  "type": "INVENTORYTRANSFER",
+  "scope": "2026-10-01..open-ended",
+  "independentlyVerified": true,
+  "evidenceRecordIds": ["183", "184", "213", "1463", "1938", "1939"],
+  "evidenceContext": "Historical deleted Inventory Transfer records validated against deletedrecord exact tuple, nonvisibility, and live negative control in Module 14 Phase L on 2026-11-02.",
+  "perCandidateDeletionAuthorized": false,
+  "automaticDeletionAuthorized": false,
+  "maxApplyBatch": 3
+}

@@ -1,0 +1,12 @@
+{
+  "module": "vendor-payment",
+  "transactionType": "VendPymt",
+  "recordtypeid": "vendorpayment",
+  "type": "VENDORPAYMENT",
+  "independentlyVerified": true,
+  "evidenceRecordIds": ["732322", "5", "2227"],
+  "evidenceRecordCount": 279,
+  "confirmedBy": "Module 12 independent historical deletedrecord tuple certification and global Transaction absence, 2026-10-29",
+  "scope": "2026-10-01..open-ended",
+  "note": "Identity only; each deletion requires fresh exact proof, global source absence, and scoped safety checks. No deletion apply authorization."
+}

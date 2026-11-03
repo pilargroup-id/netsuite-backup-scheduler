@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const deletion=readFileSync(new URL('../scripts/verified-deletion.mjs',import.meta.url),'utf8');
+const batch=readFileSync(new URL('../common/verified-deletion-batch.mjs',import.meta.url),'utf8');
+const presence=readFileSync(new URL('../modules/sales-payment/presence.mjs',import.meta.url),'utf8');
+assert.match(deletion,/const headerIdColumn = moduleName === 'sales-payment' \? 'payment_id' : 'internal_id'/);
+assert.equal((deletion.match(/CAST\(\$\{headerIdColumn\} AS STRING\)/g)||[]).length,6);
+assert.match(batch,/incomplete deletion inventory/);
+assert.match(batch,/slice\(0, 3\)/);
+assert.match(batch,/sales-payment'\]\.includes\(module\)/);
+assert.match(presence,/deletionInventory\?onlyBigQuery:onlyBigQuery\.slice\(0,30\)/);
+console.log('SALES PAYMENT DELETION CONTRACT TEST PASS');

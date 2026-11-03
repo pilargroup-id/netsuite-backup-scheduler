@@ -1,0 +1,7 @@
+{
+    "enabled":  true,
+    "catchUpSync":  true,
+    "maxRecoveryPerModulePerRun":  3,
+    "verifiedDeletionEnabled":  true,
+    "verifiedIFDeletionEnabled":  true
+}

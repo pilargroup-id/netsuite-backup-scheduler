@@ -1,0 +1,4 @@
+import {query,T} from '../../common/bigquery-client.mjs';
+import {token,fetchHeaders,FROM,TO} from './mapping.mjs';
+async function main(){const ns=new Set((await fetchHeaders(await token())).map(x=>String(x.internal_id)));const rows=await query(`SELECT internal_id FROM ${T('item_receipt_headers')} WHERE transaction_date>=DATE '${FROM}' AND transaction_date<DATE '${TO}' AND COALESCE(is_deleted,FALSE)=FALSE`);const bq=new Set(rows.map(x=>String(x.internal_id)));const onlyNS=[...ns].filter(x=>!bq.has(x)),onlyBQ=[...bq].filter(x=>!ns.has(x));console.log('NETSUITE',ns.size,'BIGQUERY',bq.size,'ONLY NETSUITE',onlyNS.length,'ONLY BIGQUERY',onlyBQ.length);console.log('ONLY NETSUITE IDs:',onlyNS);console.log('ONLY BIGQUERY IDs:',onlyBQ);if(onlyNS.length||onlyBQ.length)process.exitCode=3;else console.log('PRESENCE PASS');}
+main().catch(e=>{console.error(e.stack??e);process.exitCode=1;});

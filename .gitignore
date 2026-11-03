@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Credentials and secrets
+credentials/
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Runtime
+logs/
+scheduler-task-backups/
+scheduler-task-export/
+scheduler-task-export.zip
+
+# Telegram credentials
+config/telegram-chat-id.txt
+config/telegram-credential.clixml
+
+# Archive
+*.zip
