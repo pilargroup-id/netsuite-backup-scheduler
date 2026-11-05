@@ -87,13 +87,16 @@ try {
     } else {
       if ($command.InnerText -ne 'powershell.exe') { Fail 'Unexpected Freshness command' }
     }
+    # Device-specific registration: interactive account, no Windows password required.
+    # Preserve original template LogonType validation above; override only in-memory XML.
+    SetXml $doc '/t:Task/t:Principals/t:Principal/t:LogonType' 'InteractiveToken'
     SetXml $doc '/t:Task/t:Principals/t:Principal/t:UserId' $Account
     SetXml $doc '/t:Task/t:RegistrationInfo/t:Author' $Account
     SetXml $doc ('/t:Task/t:Triggers/t:'+$s.Kind+'/t:Repetition/t:Interval') ('PT'+$minutes+'M')
     AddDisabledSetting $doc
     # Keeping the original StartBoundary, trigger kind, duration and settings.
     $xmlText=$doc.OuterXml
-    $generated+= [pscustomobject]@{Key=$s.Key;Name=$s.Name;Interval=$minutes;LogonType=$s.Login;Xml=$xmlText;Path=$expected}
+    $generated+= [pscustomobject]@{Key=$s.Key;Name=$s.Name;Interval=$minutes;LogonType='InteractiveToken';Xml=$xmlText;Path=$expected}
   }
   # Fail closed if any named task already exists; do not overwrite or touch production.
   foreach($s in $specs) {
@@ -104,29 +107,22 @@ try {
   if ($Mode -eq 'PreviewRegister') { Write-Host 'PREVIEW ONLY: nothing registered, enabled, or started.';exit 0 }
   if (-not $TargetDeviceConfirmed) { Fail 'Register requires -TargetDeviceConfirmed. Verify this is the NEW device, not current production.' }
   $admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-  if (-not $admin) { Fail 'Run in an elevated Windows PowerShell session' }
-  $credential=Get-Credential -UserName $Account -Message 'Enter target Windows account password for Password-logon tasks'
-  if ($null -eq $credential -or $credential.UserName -ne $Account) { Fail 'Credential account must exactly match -Account' }
-  $ptr=[IntPtr]::Zero
-  try {
-    $ptr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)
-    $pass=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
-    foreach($task in $generated) {
-      if ($null -ne (Get-ScheduledTask -TaskPath '\' -TaskName $task.Name -ErrorAction SilentlyContinue)) { Fail "Existing task appeared: $($task.Name)" }
-      if ($task.LogonType -eq 'Password') {
-        Register-ScheduledTask -TaskName $task.Name -TaskPath '\' -Xml $task.Xml -User $Account -Password $pass -ErrorAction Stop | Out-Null
-      } else {
-        Register-ScheduledTask -TaskName $task.Name -TaskPath '\' -Xml $task.Xml -ErrorAction Stop | Out-Null
-      }
-      $registered=Get-ScheduledTask -TaskPath '\' -TaskName $task.Name -ErrorAction Stop
-      if ($registered.Settings.Enabled -ne $false -or [string]$registered.Triggers[0].Repetition.Interval -ne ('PT'+$task.Interval+'M')) {
-        Fail "Post-registration verification failed: $($task.Name). DO NOT enable; inspect manually."
-      }
-      Write-Host "REGISTERED DISABLED: $($task.Name)"
+  if (-not $admin) { Fail 'Run in an elevated Windows PowerShell session using the same target account' }
+  # Account must match the logged-in user. InteractiveToken cannot run without a session.
+  $loggedIn=[Security.Principal.WindowsIdentity]::GetCurrent().Name
+  if ($loggedIn -ine $Account) { Fail "InteractiveToken requires running as the target user. Current: $loggedIn; target: $Account" }
+  foreach($task in $generated) {
+    if ($null -ne (Get-ScheduledTask -TaskPath '\' -TaskName $task.Name -ErrorAction SilentlyContinue)) { Fail "Existing task appeared: $($task.Name)" }
+    # XML contains InteractiveToken and Disabled; no password supplied.
+    Register-ScheduledTask -TaskName $task.Name -TaskPath '\' -Xml $task.Xml -ErrorAction Stop | Out-Null
+    $registered=Get-ScheduledTask -TaskPath '\' -TaskName $task.Name -ErrorAction Stop
+    if ($registered.Settings.Enabled -ne $false -or
+        [string]$registered.State -ne 'Disabled' -or
+        ([string]$registered.Principal.LogonType -notin @('Interactive','InteractiveToken')) -or
+        [string]$registered.Triggers[0].Repetition.Interval -ne ('PT'+$task.Interval+'M')) {
+      Fail "Post-registration verification failed: $($task.Name). DO NOT enable; inspect manually."
     }
-  } finally {
-    $pass=$null
-    if ($ptr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+    Write-Host "REGISTERED DISABLED: $($task.Name)"
   }
   Write-Host 'REGISTER COMPLETED: all tasks DISABLED, none started. Activation/migration requires separate approval.'
 } catch {
