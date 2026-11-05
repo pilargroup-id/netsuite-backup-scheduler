@@ -95,6 +95,13 @@ try {
     SetXml $doc ('/t:Task/t:Triggers/t:'+$s.Kind+'/t:Repetition/t:Interval') ('PT'+$minutes+'M')
     AddDisabledSetting $doc
     # Keeping the original StartBoundary, trigger kind, duration and settings.
+    # Register-ScheduledTask -Xml receives a .NET UTF-16 string.
+    # Exported templates declare UTF-8; change declaration in memory to match
+    # the string passed to Task Scheduler (avoids "unable to switch the encoding").
+    if ($doc.FirstChild -isnot [System.Xml.XmlDeclaration]) {
+      Fail "Expected XML declaration in template: $($s.Key)"
+    }
+    $doc.FirstChild.Encoding='utf-16'
     $xmlText=$doc.OuterXml
     $generated+= [pscustomobject]@{Key=$s.Key;Name=$s.Name;Interval=$minutes;LogonType='InteractiveToken';Xml=$xmlText;Path=$expected}
   }
